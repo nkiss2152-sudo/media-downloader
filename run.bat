@@ -1,34 +1,37 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
 
 where python >nul 2>nul
 if errorlevel 1 (
-  echo [!] Python이 없습니다. https://www.python.org/downloads/ 에서 설치하세요. 설치 시 "Add to PATH"를 체크하세요.
+  echo [!] Python not found. Install it from https://www.python.org/downloads/
+  echo     and check "Add python.exe to PATH" during setup.
   pause
   exit /b 1
 )
 
 if not exist ".venv\Scripts\python.exe" (
-  echo [*] 가상환경 만드는 중...
-  python -m venv .venv || goto :fail
+  echo [*] Creating virtual environment...
+  python -m venv .venv
+  if errorlevel 1 goto fail
 )
 
-echo [*] 패키지 설치/업데이트 중... (yt-dlp는 자주 업데이트돼요)
-".venv\Scripts\python.exe" -m pip install -q --upgrade pip
-".venv\Scripts\python.exe" -m pip install -q --upgrade -r requirements.txt || goto :fail
+echo [*] Installing / updating packages... please wait
+".venv\Scripts\python.exe" -m pip install -q --disable-pip-version-check --upgrade -r requirements.txt
+if errorlevel 1 goto fail
 
 where ffmpeg >nul 2>nul
 if errorlevel 1 (
-  echo [!] ffmpeg가 없어서 고화질 영상 병합과 mp3 변환이 안 될 수 있어요.
-  echo     설치: winget install Gyan.FFmpeg
+  echo [!] ffmpeg not found. HD video merge and mp3 may fail.
+  echo     Install: winget install Gyan.FFmpeg
 )
 
+echo [*] Starting... the browser will open automatically.
 ".venv\Scripts\python.exe" app.py
 pause
 exit /b 0
 
 :fail
-echo [!] 설치 중 오류가 발생했습니다.
+echo [!] Setup failed. See the messages above.
 pause
 exit /b 1

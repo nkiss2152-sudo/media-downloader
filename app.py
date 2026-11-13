@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -74,8 +75,22 @@ def open_folder():
     return jsonify(ok=True)
 
 
+def _free_port(start: int) -> int:
+    """start부터 비어 있는 포트를 찾는다(이미 실행 중인 창이 있어도 충돌 방지)."""
+    for port in range(start, start + 50):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((HOST, port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError("사용 가능한 포트를 찾지 못했습니다.")
+
+
 if __name__ == "__main__":
+    port = _free_port(PORT)
+    url = f"http://{HOST}:{port}"
     if "--no-browser" not in sys.argv:
-        threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
-    print(f"  ▶ http://{HOST}:{PORT} 에서 실행 중 (종료: Ctrl+C)")
-    app.run(host=HOST, port=PORT, debug=False)
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    print(f"  Running at {url}  (stop: Ctrl+C)")
+    app.run(host=HOST, port=port, debug=False)
