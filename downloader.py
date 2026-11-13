@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yt_dlp
+from yt_dlp.utils import sanitize_filename
 
 BASE_DIR = Path(__file__).resolve().parent
 DOWNLOAD_DIR = BASE_DIR / "downloads"
@@ -170,6 +171,75 @@ def _run_ytdlp(job: Job) -> list[Path]:
     return files
 
 
+def _best_image_url(entry: dict) -> str | None:
+    """인스타 thumbnails 중 원본에 가장 가까운 이미지 주소.
+
+    yt-dlp는 선호도 낮은 것부터 정렬하므로 마지막이 보통 크기 제한 없는 원본이다.
+    잘린 정사각형(c0.… 크롭) 버전은 피한다.
+    """
+    thumbs = [t for t in entry.get("thumbnails") or [] if t.get("url")]
+    if not thumbs:
+        return entry.get("thumbnail")
+    uncropped = [t for t in thumbs if not re.search(r"stp=c\d", t["url"])]
+    return (uncropped or thumbs)[-1]["url"]
+
+
+def _run_instagram(job: Job) -> list[Path]:
+    """인스타 게시물(단일/캐러셀): 영상은 yt-dlp로, 사진은 원본 주소에서 직접 받는다.
+
+    yt-dlp는 사진 항목을 'No video formats found'로 실패 처리하기 때문에
+    정보만 먼저 받고(ignore_no_formats_error) 항목별로 나눠 처리한다.
+    """
+    opts: dict = {
+        "outtmpl": str(DOWNLOAD_DIR / "Instagram" /
+                       "%(uploader).40B - %(title).60B [%(id)s].%(ext)s"),
+        "format": "bv*[ext=mp4]+ba[ext=m4a]/bv*+ba/b",
+        "merge_output_format": "mp4",
+        "ignore_no_formats_error": True,
+        "noplaylist": False,
+        "logger": _Logger(job),
+        "windowsfilenames": True,
+        "js_runtimes": _js_runtimes(),
+        **_cookie_opts(job),
+    }
+    files: list[Path] = []
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(job.url, download=False)
+        if not info:
+            raise RuntimeError("게시물 정보를 가져오지 못했습니다.")
+        job.title = info.get("title") or info.get("id") or ""
+        post_id = info.get("id") or "post"
+        owner = info.get("uploader") or info.get("channel") or "instagram"
+        entries = [e for e in (info.get("entries") or [info]) if e]
+
+        for idx, entry in enumerate(entries, 1):
+            job.progress = (idx - 1) * 100 / len(entries)
+            is_video = bool(entry.get("formats"))
+            if is_video and job.mode != "image":
+                done = ydl.process_ie_result(entry, download=True)
+                _collect_ytdlp_files(done, files)
+            elif not is_video and job.mode != "video":
+                url = _best_image_url(entry)
+                if not url:
+                    job.add_log(f"{idx}번째 항목: 이미지 주소 없음, 건너뜀")
+                    continue
+                ext = Path(url.split("?")[0]).suffix.lower() or ".jpg"
+                if ext not in (".jpg", ".jpeg", ".png", ".webp", ".heic"):
+                    ext = ".jpg"
+                name = sanitize_filename(f"{owner[:40]} - {post_id}_{idx:02d}{ext}",
+                                         restricted=False)
+                dest = DOWNLOAD_DIR / "Instagram" / name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if not dest.exists():
+                    with ydl.urlopen(url) as resp:
+                        dest.write_bytes(resp.read())
+                job.add_log(f"[사진 {idx}/{len(entries)}] {dest.name}")
+                files.append(dest)
+    if not files:
+        raise RuntimeError("받은 파일이 없음")
+    return files
+
+
 def _run_gallerydl(job: Job) -> list[Path]:
     cmd = [sys.executable, "-m", "gallery_dl", "-d", str(DOWNLOAD_DIR)]
     if COOKIE_FILE.exists():
@@ -210,11 +280,10 @@ def run_job(job: Job) -> None:
     try:
         if job.site == "instagram" and job.mode != "audio":
             try:
-                job.add_log("gallery-dl로 인스타그램 게시물 다운로드 시도")
-                found = _run_gallerydl(job)
+                found = _run_instagram(job)
             except Exception as e:  # noqa: BLE001
-                job.add_log(f"gallery-dl 실패({e}) → yt-dlp로 재시도")
-                found = _run_ytdlp(job)
+                job.add_log(f"yt-dlp 실패({e}) → gallery-dl로 재시도")
+                found = _run_gallerydl(job)
         else:
             found = _run_ytdlp(job)
 

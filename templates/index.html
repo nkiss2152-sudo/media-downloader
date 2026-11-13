@@ -79,6 +79,14 @@
   details { margin-top: 8px; font-size: 12px; color: var(--muted); }
   details pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; background: var(--bg); padding: 8px; border-radius: 6px; margin: 6px 0 0; }
   .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 16px 0; }
+  .share { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .link { display: flex; gap: 14px; align-items: center; }
+  .link .qr { width: 112px; height: 112px; flex: none; background: #fff; border-radius: 8px; padding: 4px; }
+  .link .qr svg { width: 100%; height: 100%; display: block; }
+  .link b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .link code { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; display: block; }
+  .link button { margin-top: 8px; padding: 5px 10px; font-size: 13px; }
+  @media (max-width: 480px) { main { padding-top: 20px; } .card { padding: 16px; } }
 </style>
 </head>
 <body>
@@ -122,10 +130,24 @@
     </p>
   </section>
 
+  {% if local %}
+  <section class="card">
+    <div class="head">
+      <h2>휴대폰 · 다른 PC에서 쓰기</h2>
+      <button id="tunnel">외부 접속 켜기</button>
+    </div>
+    <div id="share" class="share"><p class="empty">불러오는 중…</p></div>
+    <p class="note">
+      QR 코드를 휴대폰 카메라로 찍으면 바로 열려요. 받은 파일은 이 PC에 저장되고, 휴대폰에서는 파일 이름을 눌러 내려받으면 돼요.
+      <b>같은 와이파이</b>가 아니면 <b>외부 접속 켜기</b>를 누르세요(이 PC가 켜져 있는 동안만 동작). 주소에 접속 키가 들어 있으니 아무에게나 공유하지 마세요.
+    </p>
+  </section>
+  {% endif %}
+
   <section class="card">
     <div class="head">
       <h2>다운로드 목록</h2>
-      <button id="open">폴더 열기</button>
+      {% if local %}<button id="open">폴더 열기</button>{% endif %}
       <button id="clear">완료 항목 지우기</button>
     </div>
     <div id="jobs"><p class="empty">아직 받은 항목이 없어요.</p></div>
@@ -196,7 +218,38 @@ $("#go").addEventListener("click", async () => {
   poll();
 });
 $("#urls").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#go").click(); });
-$("#open").addEventListener("click", () => fetch("/api/open-folder", { method: "POST" }));
+$("#open")?.addEventListener("click", () => fetch("/api/open-folder", { method: "POST" }));
+
+// ── 다른 기기 접속(이 PC에서만 보임) ──
+const TUNNEL_MSG = { missing: "cloudflared가 설치돼 있지 않아요. (winget install Cloudflare.cloudflared)", failed: "외부 주소를 만들지 못했어요. 다시 눌러보세요.", starting: "외부 주소 만드는 중… (10초 정도 걸려요)" };
+let tunnelState = "off", shareTimer = null;
+async function loadShare() {
+  if (!$("#share")) return;
+  const r = await fetch("/api/share").then((r) => r.json()).catch(() => null);
+  if (!r) return;
+  tunnelState = r.tunnel;
+  const cards = r.links.map((l) => `
+    <div class="link">
+      <div class="qr">${l.qr}</div>
+      <div><b>${esc(l.label)}</b><code>${esc(l.url)}</code><button data-copy="${esc(l.url)}">주소 복사</button></div>
+    </div>`);
+  if (TUNNEL_MSG[r.tunnel]) cards.push(`<p class="empty">${TUNNEL_MSG[r.tunnel]}</p>`);
+  $("#share").innerHTML = cards.join("") || '<p class="empty">네트워크에 연결돼 있지 않아요.</p>';
+  $("#tunnel").textContent = r.tunnel === "on" || r.tunnel === "starting" ? "외부 접속 끄기" : "외부 접속 켜기";
+  clearTimeout(shareTimer);
+  if (r.tunnel === "starting") shareTimer = setTimeout(loadShare, 1500);
+}
+$("#share")?.addEventListener("click", (e) => {
+  const u = e.target.dataset?.copy;
+  if (!u) return;
+  navigator.clipboard?.writeText(u).then(() => { e.target.textContent = "복사됨"; setTimeout(() => (e.target.textContent = "주소 복사"), 1500); });
+});
+$("#tunnel")?.addEventListener("click", async () => {
+  const on = !(tunnelState === "on" || tunnelState === "starting");
+  await fetch("/api/tunnel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }) });
+  setTimeout(loadShare, 300);
+});
+loadShare();
 $("#clear").addEventListener("click", async () => { await fetch("/api/jobs/clear", { method: "POST" }); poll(); });
 poll();
 </script>

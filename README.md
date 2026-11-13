@@ -6,6 +6,7 @@ YouTube와 Instagram의 **동영상·이미지**를 링크 하나로 받는 로�
 - **YouTube**: 최고화질 mp4, 음원(mp3), 썸네일(jpg), 재생목록 전체 받기
 - **Instagram**: 게시물 사진(여러 장 캐러셀 포함), 릴스·영상
 - 여러 링크를 줄바꿈으로 한 번에 넣기, 진행률 표시, 받은 파일 미리보기
+- **휴대폰·다른 PC에서 접속** (같은 와이파이 QR 코드, 외부 접속용 임시 주소, 접속 키 보호)
 
 엔진으로 [yt-dlp](https://github.com/yt-dlp/yt-dlp)와 [gallery-dl](https://github.com/mikf/gallery-dl)을 사용합니다.
 
@@ -42,6 +43,22 @@ python -m venv .venv
 pip install -r requirements.txt
 python app.py
 ```
+
+## 휴대폰 · 다른 PC에서 쓰기
+
+다운로더를 켠 PC 화면에 **"휴대폰 · 다른 PC에서 쓰기"** 칸이 나오고, QR 코드와 주소가 보입니다.
+
+| 상황 | 방법 |
+|---|---|
+| 같은 와이파이 | QR 코드를 휴대폰 카메라로 찍거나 `http://<내부IP>:5000/?key=<접속키>` 주소로 접속 |
+| 다른 네트워크(LTE, 회사 등) | **외부 접속 켜기** 버튼 → `https://….trycloudflare.com/?key=<접속키>` 주소 생성 |
+
+- 다운로드는 **다운로더를 켠 PC**에서 일어나고, 휴대폰에서는 받은 파일 이름을 눌러 저장합니다.
+- 다른 기기에서 쓰려면 다운로더 PC가 켜져 있고 실행 창이 열려 있어야 합니다.
+- 다른 기기에서는 처음 한 번 **접속 키**가 필요합니다. QR 코드나 주소에 이미 들어 있습니다. 접속 키는 `access_key.txt`에 저장되며, 파일을 지우면 새 키가 만들어집니다.
+- 외부 접속은 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)의 무료 임시 주소를 씁니다. 처음 한 번 설치하세요: `winget install Cloudflare.cloudflared`. 주소는 켤 때마다 바뀝니다.
+- 처음 실행할 때 Windows 방화벽 창이 뜨면 **허용**을 누르세요(개인 네트워크). 같은 와이파이에서 접속이 안 되면 대부분 이 설정 때문입니다.
+- 주소에 접속 키가 들어 있으니 아무에게나 공유하지 마세요.
 
 ## 다운로드 방식
 
