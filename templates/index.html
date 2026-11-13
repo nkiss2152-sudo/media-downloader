@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Media Downloader</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1b1d22; --muted: #6b7280;
+    --line: #e4e6eb; --accent: #2f6fed; --accent-text: #fff;
+    --ok: #15803d; --err: #c62828; --run: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111317; --card: #1a1d23; --text: #e8eaee; --muted: #9aa1ad;
+      --line: #2a2e36; --accent: #5b8cff; --accent-text: #0b0d10;
+      --ok: #4ade80; --err: #f87171; --run: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px; margin-bottom: 20px;
+  }
+  textarea {
+    width: 100%; min-height: 96px; resize: vertical; padding: 12px;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--text); font: inherit;
+  }
+  textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 14px; }
+  .modes { display: flex; flex-wrap: wrap; gap: 6px; }
+  .modes label {
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px;
+    cursor: pointer; font-size: 14px; user-select: none;
+  }
+  .modes input { display: none; }
+  .modes input:checked + span { color: var(--accent); font-weight: 600; }
+  .modes label:has(input:checked) { border-color: var(--accent); }
+  select {
+    padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--text); font: inherit; font-size: 14px;
+  }
+  .chk { font-size: 14px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .spacer { flex: 1; }
+  button {
+    font: inherit; border-radius: 8px; padding: 9px 18px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .note b { color: var(--text); font-weight: 600; }
+  .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .head h2 { font-size: 16px; margin: 0; flex: 1; }
+  .head button { padding: 6px 12px; font-size: 13px; }
+  .job { border-top: 1px solid var(--line); padding: 14px 0; }
+  .job:first-of-type { border-top: 0; }
+  .job-top { display: flex; gap: 10px; align-items: baseline; }
+  .badge { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .s-done { color: var(--ok); } .s-error { color: var(--err); }
+  .s-running, .s-queued { color: var(--run); }
+  .title { font-weight: 600; overflow-wrap: anywhere; flex: 1; }
+  .url { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .bar > div { height: 100%; background: var(--accent); transition: width .3s; }
+  .files { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
+  .file { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 12px; }
+  .file .thumb { aspect-ratio: 1; background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+  .file img, .file video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .file a { display: block; padding: 6px 8px; color: var(--accent); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  details { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  details pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; background: var(--bg); padding: 8px; border-radius: 6px; margin: 6px 0 0; }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Media Downloader</h1>
+  <p class="sub">YouTube · Instagram 동영상과 이미지를 링크로 받아요. 여러 개는 줄바꿈으로 구분하세요.</p>
+
+  <section class="card">
+    <textarea id="urls" placeholder="https://www.youtube.com/watch?v=...&#10;https://www.instagram.com/p/...&#10;https://www.instagram.com/reel/..."></textarea>
+    <div class="row">
+      <div class="modes" role="radiogroup" aria-label="다운로드 방식">
+        <label><input type="radio" name="mode" value="auto" checked><span>자동</span></label>
+        <label><input type="radio" name="mode" value="video"><span>동영상</span></label>
+        <label><input type="radio" name="mode" value="audio"><span>음원(mp3)</span></label>
+        <label><input type="radio" name="mode" value="image"><span>이미지·썸네일</span></label>
+      </div>
+    </div>
+    <div class="row">
+      <label class="chk">로그인 쿠키
+        <select id="browser" {% if cookie_file %}disabled{% endif %}>
+          <option value="">사용 안 함</option>
+          <option value="chrome">Chrome</option>
+          <option value="edge">Edge</option>
+          <option value="firefox">Firefox</option>
+          <option value="whale">Whale</option>
+          <option value="brave">Brave</option>
+          <option value="opera">Opera</option>
+        </select>
+      </label>
+      <label class="chk"><input type="checkbox" id="playlist"> 재생목록 전체</label>
+      <span class="spacer"></span>
+      <button class="primary" id="go">다운로드</button>
+    </div>
+    <p class="note">
+      {% if cookie_file %}
+        <b>cookies.txt</b> 파일을 사용 중이에요.
+      {% else %}
+        인스타그램은 로그인 쿠키가 필요한 경우가 많아요. 브라우저를 고르거나 프로젝트 폴더에 <b>cookies.txt</b>를 넣으세요.
+      {% endif %}
+      자동 모드에서 유튜브는 최고화질 mp4, 인스타는 게시물의 사진·영상을 모두 받아요.
+    </p>
+  </section>
+
+  <section class="card">
+    <div class="head">
+      <h2>다운로드 목록</h2>
+      <button id="open">폴더 열기</button>
+      <button id="clear">완료 항목 지우기</button>
+    </div>
+    <div id="jobs"><p class="empty">아직 받은 항목이 없어요.</p></div>
+  </section>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const STATUS = { queued: "대기", running: "받는 중", done: "완료", error: "실패" };
+const IMG = /\.(jpe?g|png|webp|gif|heic)$/i, VID = /\.(mp4|webm|mov|mkv)$/i;
+
+try { $("#browser").value = localStorage.getItem("browser") || ""; } catch {}
+$("#browser").addEventListener("change", (e) => { try { localStorage.setItem("browser", e.target.value); } catch {} });
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function fileUrl(f) { return "/files/" + f.split("/").map(encodeURIComponent).join("/"); }
+
+function renderFile(f) {
+  const u = fileUrl(f), name = f.split("/").pop();
+  let thumb = `<div class="thumb">${esc(name.split(".").pop().toUpperCase())}</div>`;
+  if (IMG.test(f)) thumb = `<div class="thumb"><img loading="lazy" src="${u}" alt=""></div>`;
+  else if (VID.test(f)) thumb = `<div class="thumb"><video src="${u}#t=0.5" preload="metadata" muted></video></div>`;
+  return `<div class="file">${thumb}<a href="${u}?dl=1" title="${esc(name)}">${esc(name)}</a></div>`;
+}
+
+let openLogs = new Set();
+function render(jobs) {
+  if (!jobs.length) { $("#jobs").innerHTML = '<p class="empty">아직 받은 항목이 없어요.</p>'; return; }
+  document.querySelectorAll("details[data-id]").forEach((d) => d.open ? openLogs.add(d.dataset.id) : openLogs.delete(d.dataset.id));
+  $("#jobs").innerHTML = jobs.map((j) => `
+    <div class="job">
+      <div class="job-top">
+        <span class="badge s-${j.status}">${STATUS[j.status]}</span>
+        <span class="title">${esc(j.title || j.url)}</span>
+      </div>
+      <div class="url">${esc(j.url)}</div>
+      ${j.status === "running" || j.status === "queued" ? `<div class="bar"><div style="width:${j.progress}%"></div></div>` : ""}
+      ${j.files.length ? `<div class="files">${j.files.map(renderFile).join("")}</div>` : ""}
+      <details data-id="${j.id}" ${openLogs.has(j.id) || j.status === "error" ? "open" : ""}><summary>로그</summary><pre>${esc(j.log.join("\n"))}</pre></details>
+    </div>`).join("");
+}
+
+let timer = null;
+async function poll() {
+  const r = await fetch("/api/jobs").then((r) => r.json()).catch(() => null);
+  if (!r) return;
+  render(r.jobs);
+  const busy = r.jobs.some((j) => j.status === "running" || j.status === "queued");
+  clearTimeout(timer);
+  if (busy) timer = setTimeout(poll, 1000);
+}
+
+$("#go").addEventListener("click", async () => {
+  const urls = $("#urls").value.trim();
+  if (!urls) return $("#urls").focus();
+  $("#go").disabled = true;
+  const res = await fetch("/api/download", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      urls, mode: document.querySelector("input[name=mode]:checked").value,
+      browser: $("#browser").disabled ? "" : $("#browser").value,
+      playlist: $("#playlist").checked,
+    }),
+  }).then((r) => r.json()).catch(() => ({ error: "서버에 연결할 수 없어요." }));
+  $("#go").disabled = false;
+  if (res.error) return alert(res.error);
+  $("#urls").value = "";
+  poll();
+});
+$("#urls").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("#go").click(); });
+$("#open").addEventListener("click", () => fetch("/api/open-folder", { method: "POST" }));
+$("#clear").addEventListener("click", async () => { await fetch("/api/jobs/clear", { method: "POST" }); poll(); });
+poll();
+</script>
+</body>
+</html>
