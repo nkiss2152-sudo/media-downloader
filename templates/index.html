@@ -75,7 +75,22 @@
   .file { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 12px; }
   .file .thumb { aspect-ratio: 1; background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--muted); }
   .file img, .file video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .file a { display: block; padding: 6px 8px; color: var(--accent); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file { display: flex; flex-direction: column; }
+  .file .view { display: block; }
+  .fname { padding: 6px 8px 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file .dl {
+    display: block; margin: 6px 8px 8px; padding: 8px 0; text-align: center; border-radius: 6px;
+    background: var(--accent); color: var(--accent-text); font-weight: 600; font-size: 13px; text-decoration: none;
+  }
+  .dl-all {
+    display: inline-block; margin-top: 10px; padding: 8px 14px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    border: 1px solid var(--accent); color: var(--accent); text-decoration: none;
+  }
+  @media (max-width: 480px) {
+    .files { grid-template-columns: repeat(2, 1fr); }
+    .file .dl { padding: 11px 0; font-size: 15px; }
+    .dl-all { display: block; text-align: center; padding: 12px; }
+  }
   details { margin-top: 8px; font-size: 12px; color: var(--muted); }
   details pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; background: var(--bg); padding: 8px; border-radius: 6px; margin: 6px 0 0; }
   .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 16px 0; }
@@ -169,8 +184,12 @@ function renderFile(f) {
   const u = fileUrl(f), name = f.split("/").pop();
   let thumb = `<div class="thumb">${esc(name.split(".").pop().toUpperCase())}</div>`;
   if (IMG.test(f)) thumb = `<div class="thumb"><img loading="lazy" src="${u}" alt=""></div>`;
-  else if (VID.test(f)) thumb = `<div class="thumb"><video src="${u}#t=0.5" preload="metadata" muted></video></div>`;
-  return `<div class="file">${thumb}<a href="${u}?dl=1" title="${esc(name)}">${esc(name)}</a></div>`;
+  else if (VID.test(f)) thumb = `<div class="thumb"><video src="${u}#t=0.5" preload="metadata" muted playsinline></video></div>`;
+  return `<div class="file">
+    <a class="view" href="${u}" target="_blank" rel="noopener" title="크게 보기">${thumb}</a>
+    <div class="fname" title="${esc(name)}">${esc(name)}</div>
+    <a class="dl" href="${u}?dl=1" download="${esc(name)}">⬇ 다운로드</a>
+  </div>`;
 }
 
 let openLogs = new Set();
@@ -185,6 +204,7 @@ function render(jobs) {
       </div>
       <div class="url">${esc(j.url)}</div>
       ${j.status === "running" || j.status === "queued" ? `<div class="bar"><div style="width:${j.progress}%"></div></div>` : ""}
+      ${j.files.length > 1 ? `<a class="dl-all" href="/zip/${j.id}">⬇ 전체 받기 (${j.files.length}개, zip)</a>` : ""}
       ${j.files.length ? `<div class="files">${j.files.map(renderFile).join("")}</div>` : ""}
       <details data-id="${j.id}" ${openLogs.has(j.id) || j.status === "error" ? "open" : ""}><summary>로그</summary><pre>${esc(j.log.join("\n"))}</pre></details>
     </div>`).join("");

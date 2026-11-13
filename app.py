@@ -16,14 +16,17 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import webbrowser
+import zipfile
 from pathlib import Path
 
 import qrcode
 import qrcode.image.svg
 from flask import (Flask, abort, jsonify, make_response, redirect, render_template,
-                   request, send_from_directory)
+                   request, send_file, send_from_directory)
+from yt_dlp.utils import sanitize_filename
 
 from downloader import BASE_DIR, BROWSERS, COOKIE_FILE, DOWNLOAD_DIR, MODES, Job, JobManager
 
@@ -131,6 +134,26 @@ def files(name: str):
     if not DOWNLOAD_DIR.exists():
         abort(404)
     return send_from_directory(DOWNLOAD_DIR, name, as_attachment=request.args.get("dl") == "1")
+
+
+@app.get("/zip/<job_id>")
+def zip_job(job_id: str):
+    """한 작업에서 받은 파일 여러 개를 zip 하나로 내려준다(휴대폰에서 한 번에 저장용)."""
+    job = manager.jobs.get(job_id)
+    if not job or not job.files:
+        abort(404)
+    root = DOWNLOAD_DIR.resolve()
+    tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as zf:  # 사진·영상은 이미 압축돼 있음
+        for rel in job.files:
+            p = (root / rel).resolve()
+            if p.is_file() and p.is_relative_to(root):
+                zf.write(p, arcname=p.name)
+    tmp.close()
+    name = sanitize_filename(f"{(job.title or job.id)[:60]}.zip", restricted=False)
+    resp = send_file(tmp.name, as_attachment=True, download_name=name, mimetype="application/zip")
+    resp.call_on_close(lambda: os.unlink(tmp.name))
+    return resp
 
 
 @app.post("/api/open-folder")
